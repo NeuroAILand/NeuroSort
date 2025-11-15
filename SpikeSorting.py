@@ -201,7 +201,7 @@ if __name__ == '__main__':
                             segment_end = segment_start
                             while segment_end < len(sorted_index_time) - 1 and (
                                     sorted_index_time[segment_end + 1] - sorted_index_time[
-                                segment_end] <= params.get('sample_rate') * 0.0003):
+                                segment_end] <= params.get('sample_rate') * 0.0006):
                                 segment_end += 1
 
                             segment_indices = sorted_indices[segment_start:segment_end + 1]
