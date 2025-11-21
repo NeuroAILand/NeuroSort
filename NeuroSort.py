@@ -202,7 +202,7 @@ class SpikeSort:
         self.patience = params.get('patience')
         self.lossVariance_threshold = params.get('lossVariance_threshold')
         self.params = params
-        self.max_num_units = = 1 << (params.get('num_channels') - 1).bit_length()
+        self.max_num_units = 1 << (params.get('num_channels') - 1).bit_length()
 
     def spikeSorting(self, encoder, decoder, encoder_optimizer, decoder_optimizer,
                      train_dataloader, test_dataloader):
@@ -257,10 +257,10 @@ class SpikeSort:
                 p_raw_all.append(p_indices)
 
             p_raw_all = torch.cat(p_raw_all, dim=0).cpu()
-        if self.inference:
-            return p_raw_all_infer, p_raw_all
-        else:
-            return p_raw_all  
+        # if self.inference:
+        #     return p_raw_all_infer, p_raw_all
+        # else:
+        return p_raw_all  
 
     def getFeature(self, encoder, test_dataloader, seed_group=None):
         encoder.eval()
