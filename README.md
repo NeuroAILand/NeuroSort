@@ -36,11 +36,115 @@ conda env create -f environment.yaml
 conda activate pytorch_gpu
 ```
 
+## 🧪 Demo Dataset
+
+We provide a simulated dataset `dataset/demo.dat` to help you quickly test the pipeline. This dataset was generated using real neural data as the foundation:
+
+### Data Source
+The underlying neural waveforms are derived from the **publicly available extracellular dataset with known ground truth** collected by Matthew G. Perich, available through CRCNS (https://crcns.org/data-sets/motor-cortex/pmd-1/about-pmd-1).
+
+### Simulation Method
+1. **Realistic Waveform Embedding**: Taking spike waveforms from real neural units and embedding them at their occurrence times across channels
+2. **Realistic Noise**: Adding bandpass-filtered noise at approximately 30 µV RMS
+3. **Quantization**: Converting to int16 format matching Neuropixels data acquisition
+
+### Demo Configuration
+To run the demo, use these parameters in `SpikeSorting.py`:
+
+```python
+params = {
+    'directory': '../dataset',
+    'filename': 'demo.dat',
+    'num_channels': 100,
+    'sample_rate': 20000,
+    'threshold': 7,  # Demo-specific threshold
+    'is_electrode_correlation': False,
+    'batch_size': 256,  # Smaller batch for demo
+    'num_chunks': 1,  # Single chunk processing
+    'max_workers_preprocess': 1,
+    'max_workers_detect': 1,
+    'patience': 2,
+    # ... other parameters
+}
+```
+
+## ⏱️ Performance Benchmarks
+
+### Expected Run Time (Demo Dataset)
+On a "normal" desktop computer with:
+- **CPU**: Intel Core i7-12700K or equivalent
+- **GPU**: NVIDIA RTX 3080 (12GB VRAM)
+- **RAM**: 32GB DDR4
+- **Storage**: NVMe SSD
+
+The demo pipeline completes in approximately **35 seconds**:
+
+| Stage | Time | Peak Memory |
+|-------|------|-------------|
+| **Data Filtering** | 7.06 seconds | 4.2 GB RAM |
+| **Spike Detection** | 8.86 seconds | 1.0 GB RAM |
+| **Spike Sorting** | 19.38 seconds | 900 MB GPU RAM |
+| **Validation** | 0.01 seconds | Minimal |
+| **Total** | **35.31 seconds** | **4.2 GB RAM max** |
+
+**Note**: Performance scales with data size. Full Neuropixels recordings (1-2 hours) typically take 10-30 minutes depending on spike density.
+
+### Typical Install Time
+- **Environment Setup**: 3-5 minutes (conda environment creation)
+- **Dependency Installation**: 2-4 minutes (PyTorch + dependencies)
+- **Total**: **5-9 minutes** on a standard desktop with good internet connection
+
+## 🖥️ Hardware Requirements
+
+### Minimum Requirements
+- **CPU**: 4+ cores (Intel i5 / AMD Ryzen 5 or better)
+- **RAM**: 8 GB (16 GB recommended for large datasets)
+- **GPU**: NVIDIA GPU with 4+ GB VRAM and CUDA support
+- **Storage**: 10 GB free space
+
+### Recommended Configuration
+- **CPU**: 8+ cores (Intel i7 / AMD Ryzen 7)
+- **RAM**: 16-32 GB
+- **GPU**: NVIDIA RTX 3060+ with 8+ GB VRAM
+- **Storage**: NVMe SSD for optimal I/O performance
+
+
+## 🔬 Demo Validation
+
+After running the demo, you should expect:
+
+1. **Output Files**: `spikeInfo.h5` containing:
+   - Detected spike times, detection channels and waveforms
+   - Automatic cluster assignments
+
+2. **Visual Validation**: Use the provided tutorial to load results into Phy:
+   ```bash
+   python tutorials/load_result.py
+   phy template-gui params.py
+   ```
+
+
+## 📈 Scaling to Larger Datasets
+
+For full experimental recordings, consider these adjustments:
+
+```python
+params = {
+    'num_chunks': 4,  # Parallel processing
+    'max_workers_preprocess': 4,
+    'max_workers_detect': 4,
+    'batch_size': 4096,  # Larger batches for efficiency
+    'threshold': 5,  # Standard threshold
+    # ... other parameters
+}
+```
+
+
 ## 📖 Quick Start
 
 ### 1. Configure Your Data
 
-Update the parameters in `main.py`:
+Update the parameters in `SpikeSorting.py`:
 
 ```python
 params = {
@@ -125,6 +229,8 @@ NeuroSort/
 ├── AttenModel.py           # Model architecture
 ├── SpikeUtils              # Utility functions for Preprocessing and Spike detection
 ├── ContrasAug.py           # Data augmentation
+├── dataset/                # New directory for demo dataset
+│   └── demo.dat            # Simulated demo dataset
 ├── tutorials/
 │   └── load_result.ipynb   # Phy conversion utility
 └── environment.yaml        # Dependencies

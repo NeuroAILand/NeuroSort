@@ -14,6 +14,26 @@ import torch
 import torch.optim as optim
 import os
 import sys
+import time
+import threading
+import psutil
+
+def _run_and_monitor_cpu_peak(func, *args, **kwargs):
+    result = [None]
+    def run():
+        result[0] = func(*args, **kwargs)
+    t = threading.Thread(target=run)
+    t.start()
+    max_cpu = 0.0
+    max_rss_mb = 0.0
+    proc = psutil.Process() if psutil else None
+    while t.is_alive():
+        time.sleep(0.2)
+        if psutil:
+            max_cpu = max(max_cpu, psutil.cpu_percent())
+            max_rss_mb = max(max_rss_mb, proc.memory_info().rss / (1024 * 1024))
+    t.join()
+    return result[0], max_cpu, max_rss_mb
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 torch.cuda.set_device(0)
@@ -25,25 +45,25 @@ params = {
     'filter_low': 250,
     'filter_high': 7000,
     'filter_order': 3,
-    'threshold': 5,  # between 3 and 7 is commonly used, but this can vary depending on the application.
+    'threshold': 7,  # between 3 and 7 is commonly used, but this can vary depending on the application.
     'pos_neg_detect': -1,  # 1 means positive detection, -1 means negative detection
     'define_threshold': None,  # If this is none, the 'threshold' will be used to adaptively detect spikes.
     'detect_interval': 0.002,
     'adc_to_uV': 0.195,    # neuropixel use 0.195 to convert adc to uV
-    'num_channels': 384,   
-    'sample_rate': 30000,  
-    'is_electrode_correlation': True,  # If False, do not need to sort channel number
-    'directory': '/spikesorting/neuropixel',  # Dir of the raw data
-    'filename': 'continuous.dat',    # Filename of the raw data
-    'num_chunks': 144,  # Number of chunks for Multithreaded processing
-    'max_workers_preprocess': 144,
-    'max_workers_detect': 144,
+    'num_channels': 100,   
+    'sample_rate': 20000,  
+    'is_electrode_correlation': False,  # If False, do not need to sort channel number
+    'directory': '../dataset',  # Dir of the raw data
+    'filename': 'demo.dat',    # Filename of the raw data
+    'num_chunks': 1,  # Number of chunks for Multithreaded processing
+    'max_workers_preprocess': 1,
+    'max_workers_detect': 1,
     # set training parameters of the spike sorting algorithm 
     'windowForTrain': 48,   # the waveform length for training, it must be divisible by 4
     'epoch': 20,
-    'batch_size': 4096,
-    'patience': 5,  # tolerance, means after several epochs the MI stopped training without a significant increase
-    'lossVariance_threshold': 1e-2,  # variance threshold for iic_loss
+    'batch_size': 256,
+    'patience': 2,  # tolerance, means after several epochs the MI stopped training without a significant increase
+    'lossVariance_threshold': 1e-4,  # variance threshold for iic_loss
     'seed': 1,
     'model_output_dictionary': 'model',  # Dir for saving model
     'encoder_filename': None,  # If set the filename like 'encoder_parameters.pth', the model paramenters will be saved
@@ -72,7 +92,7 @@ if __name__ == '__main__':
         os.remove(spikeInfo_filepath)
         print(f"The old file {spikeInfo_filepath} is delete.")
 
-    else:
+    if not os.path.exists(spikeInfo_filepath): 
         print(f"{spikeInfo_filepath} is not exits, will create this file.")
         # Input the location of your electrophysiology data
         file_path = os.path.join(directory, filename)
@@ -81,9 +101,13 @@ if __name__ == '__main__':
         # Initialize the SpikeDetection object with the parameters
         detector = SpikeDetection(params, output_directory)
         # return the detected spikes
-        preprocess_time = detector.run_preprocess(data)
+        preprocess_ret, cpu_peak, rss_peak_mb = _run_and_monitor_cpu_peak(detector.run_preprocess, data)
+        preprocess_time = preprocess_ret
+        print(f'Preprocess: peak CPU {cpu_peak:.1f}%, peak RAM {rss_peak_mb:.1f} MB')
         del data
-        detection_time, time, electrode, spike = detector.run_detection()
+        det_ret, cpu_peak, rss_peak_mb = _run_and_monitor_cpu_peak(detector.run_detection)
+        detection_time, time, electrode, spike = det_ret
+        print(f'Detection: peak CPU {cpu_peak:.1f}%, peak RAM {rss_peak_mb:.1f} MB')
 
         spike = spike[:,
                 chunk - params.get('windowForTrain') // 4: chunk + params.get('windowForTrain') // 4 * 3]
@@ -116,8 +140,10 @@ if __name__ == '__main__':
             tree_depth = max(int(math.log2(max_num_units / 16)), 1)
         
             print("Depth of tree is %d." % tree_depth)
+            batch_size = params.get('batch_size', 512)
+            num_nodes_time = int(8192 * (2 ** int(round(math.log2(batch_size / 512)))))
             config = ModelConfig(feature_dim=spike.shape[1], num_channels=params.get('num_channels'),
-                                tree_depth=tree_depth)
+                                tree_depth=tree_depth, num_nodes_time=num_nodes_time)
 
             independent_rng = torch.Generator()
             independent_rng.manual_seed(torch.initial_seed())  
@@ -142,10 +168,13 @@ if __name__ == '__main__':
             if params.get('decoder_filename') is not None:
                 decoder_filepath = os.path.join(model_directory, 'seed_' + str(sss) + params.get('decoder_filename'))
             start = datetime.datetime.now()
+            torch.cuda.reset_peak_memory_stats()
             raw_label = spikeSort.spikeSorting(encoder, decoder, encoder_optimizer,
                                                         decoder_optimizer,
                                                         train_dataloader, test_dataloader)
             end = datetime.datetime.now()
+            peak_gpu_mb = torch.cuda.max_memory_allocated() / (1024 * 1024)
+            print(f'Clustering: peak GPU memory {peak_gpu_mb:.1f} MB')
             sort_time = end - start
             print('Spike sorting time lasting:', sort_time)
 
@@ -161,7 +190,6 @@ if __name__ == '__main__':
 
             unique_elements, inverse_indices = torch.unique(raw_label, sorted=True, return_inverse=True)
             units_tacsort_raw = unique_elements.size(0)
-            print('Before checking, the number of putative units:', units_tacsort_raw)
 
             # check
             start = datetime.datetime.now()
