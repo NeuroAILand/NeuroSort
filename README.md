@@ -189,7 +189,7 @@ phy template-gui params.py
 | `threshold` | Spike detection threshold (× RMS) | 5 |
 | `filter_low/high` | Bandpass filter range (Hz) | 250-7000 |
 | `batch_size` | Training batch size | 4096 |
-| `epoch` | Training epochs | 20 |
+| `adc_to_uV` | Convert adc to uV | 0.195 |
 
 ### Data Paths
 
