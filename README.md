@@ -48,6 +48,15 @@ The underlying neural waveforms are derived from the **publicly available extrac
 2. **Realistic Noise**: Adding bandpass-filtered noise at approximately 30 µV RMS
 3. **Quantization**: Converting to int16 format matching Neuropixels data acquisition
 
+### Download Demo Data
+
+Download from Google Drive: [demo.dat.gz](https://drive.google.com/file/d/1K5CyS1lPZrEDx6pAYNFJpJXRNeAEcSuw/view?usp=sharing) (165 MB compressed)
+
+After downloading:
+```bash
+mv ~/Downloads/demo.dat.gz dataset/  # Move to dataset folder
+gzip -d dataset/demo.dat.gz          # Decompress
+
 ### Demo Configuration
 To run the demo, use these parameters in `SpikeSorting.py`:
 
@@ -230,7 +239,7 @@ NeuroSort/
 ├── SpikeUtils              # Utility functions for Preprocessing and Spike detection
 ├── ContrasAug.py           # Data augmentation
 ├── dataset/                # New directory for demo dataset
-│   └── demo.dat            # Simulated demo dataset
+│   └── demo.dat            # Simulated demo dataset, Download dataset and Decompress here
 ├── tutorials/
 │   └── load_result.ipynb   # Phy conversion utility
 └── environment.yaml        # Dependencies
